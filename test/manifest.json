@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "listData",
+  "version": "1.0.0",
+  "description": "",
+  "icons": {
+    "48": "images/48.png",
+    "128": "images/128.png"
+  },
+  "content_scripts": [
+  {
+    "matches": ["https://seller.kuajingmaihuo.com/*", "https://agentseller.temu.com/*"],
+    "js": ["content.js"],
+    "run_at": "document_start" 
+  }
+],
+"web_accessible_resources": [{
+    "resources": ["interceptor.js"],
+    "matches": ["<all_urls>"]
+}]
+}
