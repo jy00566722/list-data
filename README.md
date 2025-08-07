@@ -19,10 +19,21 @@ Temu卖家数据洞察平台
 
 ## 2. 数据采集端 (Chrome 插件) 详细设计
 
-### 2.1. 最终方案：`fetch` 代理注入
+### 2.1. 开发框架：WXT (Web Extension Toolkit)
+为提升开发效率、代码质量和长期可维护性，数据采集端将采用 **WXT** 框架进行构建。
+
+*   **优势:**
+    *   **现代化开发体验:** 提供开箱即用的热模块重载 (HMR)，代码修改（包括后台脚本和内容脚本）能即时生效，无需手动重载插件。
+    *   **简化的代码结构:** 通过明确的入口点（entrypoints）管理，使代码组织更清晰、更符合逻辑。
+    *   **自动化构建:** 自动处理 `manifest.json` 的生成和跨浏览器打包，简化了发布流程。
+
+*   **集成方案:**
+    本文档后续描述的 **`fetch` 代理注入方案** 将在 WXT 的框架内实现。`content.js` 将作为 WXT 的一个 `content_script` 入口点，其核心职责（注入 `interceptor.js` 并与后端通信）保持不变。
+
+### 2.2. 核心方案：`fetch` 代理注入
 为确保数据采集的稳定性、无感化和高成功率，我们采用**非侵入式的 `fetch` 代理注入方案**。
 
-*   **原理:** 通过 `content_script` 向页面主环境（Main World）注入一个 `interceptor.js` 脚本。该脚本会重写页面原生的 `window.fetch` 函数。当页面自身的JS代码调用 `fetch` 请求数据时，我们的代理逻辑会检查请求的URL。如果URL是我们关心的目标API，代理会在请求正常返回后，**克隆**一份返回结果（Response），并将数据通过 `window.postMessage` 安全地发送给 `content_script`。原始的返回结果会原封不动地交给页面，确保对Temu后台的正常运行无任何干扰。
+*   **原理:** 通过 WXT 配置的 `content_script` 向页面主环境（Main World）注入一个 `interceptor.js` 脚本。该脚本会重写页面原生的 `window.fetch` 函数。当页面自身的JS代码调用 `fetch` 请求数据时，我们的代理逻辑会检查请求的URL。如果URL是我们关心的目标API，代理会在请求正常返回后，**克隆**一份返回结果（Response），并将数据通过 `window.postMessage` 安全地发送给 `content_script`。原始的返回结果会原封不动地交给页面，确保对Temu后台的正常运行无任何干扰。
 
 *   **优势:**
     *   **高稳定性:** 不依赖页面DOM结构或CSS选择器，只关心API接口，极大降低了因Temu前端更新而失效的风险。
@@ -30,27 +41,28 @@ Temu卖家数据洞察平台
     *   **用户无感:** 整个过程在后台静默运行，用户无需打开开发者工具（F12），实现了真正的自动化采集。
     *   **非阻塞式:** 代理逻辑不会阻塞或延迟页面的正常网络请求。
 
-### 2.2. 实现流程
+### 2.3. 实现流程
 
-1.  **`manifest.json`**:
-    *   配置 `content_scripts`，使其在文档加载初期（`document_start`）就注入 `content.js`。
-    *   通过 `web_accessible_resources` 声明，允许页面加载我们插件中的 `interceptor.js` 文件。
+1.  **`wxt.config.ts` & `entrypoints/`**:
+    *   在 `wxt.config.ts` 中配置 `manifest` 字段，定义 `content_scripts`。
+    *   `content.js` 作为内容脚本入口点，放置在 `entrypoints/content/` 目录下。
+    *   `interceptor.js` 作为 `web_accessible_resources`，放置在 `public/` 目录下，WXT会自动处理其可访问性。
 
-2.  **`content.js`**:
+2.  **`entrypoints/content/index.js` (`content.js`)**:
     *   **职责一 (注入):** 创建一个 `<script>` 标签，将其 `src` 指向 `interceptor.js`，并添加到文档的 `<head>` 中。注入后立即移除该标签，保持DOM干净。
     *   **职责二 (监听与转发):** 监听来自 `interceptor.js` 的 `message` 事件，接收到数据后，调用上报模块，将数据发送到Golang后端。
 
-3.  **`interceptor.js`**:
+3.  **`public/interceptor.js`**:
     *   **核心代理:** 保存原始 `fetch` 函数的引用，然后使用自定义函数覆盖 `window.fetch`。
     *   **URL匹配:** 在自定义函数内部，检查请求URL是否包含在我们的目标API列表中。
     *   **数据捕获与发送:** 如果URL匹配，就克隆 `response`，读取其 `json` 内容，并通过 `window.postMessage` 将数据发送给 `content.js`。
     *   **返回原始Promise:** 无论是否捕获数据，都必须将原始 `fetch` 调用的 `Promise` 返回，确保页面行为一致。
 
-### 2.3. 扩展性设计
+### 2.4. 扩展性设计
 为了方便未来增加对更多API（如库存、备货等）的监控，我们设计一个可配置的API处理器映射表。
 
 ```javascript
-// interceptor.js 或 content.js 中
+// public/interceptor.js 或 entrypoints/content/index.js 中
 const ApiHandlerMap = {
   // Key: API URL中用于识别的独特部分
   '/mms/venom/api/supplier/sales/management/querySkuSalesNumber': {
@@ -74,9 +86,9 @@ const ApiHandlerMap = {
 
 ### 3.1. 技术栈
 *   **语言:** Golang
-*   **Web框架:** Gin (或 Echo)
+*   **Web框架:** Gin
 *   **数据库:** MySQL
-*   **ORM/数据库驱动:** GORM (或 sqlx)
+*   **ORM/数据库驱动:** GORM
 
 ### 3.2. 数据库设计
 
@@ -111,27 +123,23 @@ const ApiHandlerMap = {
     ) ENGINE=InnoDB COMMENT='库存水平表';
     ```
 
-### 3.3. 应用架构
-采用经典的分层架构，确保代码的清晰、可维护和可扩展。
+### 3.3. 应用架构 (精简分层)
+为适应项目初期的快速迭代需求，我们采用更直接、高效的**精简分层架构**。该架构在保证代码清晰度的同时，最大限度地减少了样板代码，提升了开发效率。
 
-*   **`main.go`**: 程序入口，负责初始化配置、数据库连接、路由等。
-*   **`config/`**: 加载和管理应用配置（如数据库连接信息、服务器端口等）。
-*   **`router/`**: 定义API路由。将HTTP路径映射到对应的`handler`函数。
-    *   `POST /api/v1/data/daily-sales`: 接收并保存每日销量数据。
-    *   `POST /api/v1/data/inventory`: (未来) 接收库存数据。
-    *   `GET /api/v1/analysis/summary`: (未来) 提供数据分析汇总接口。
-*   **`handler/` (或 `controller/`)**: 处理HTTP请求。负责解析和校验请求参数，并调用`service`层处理业务逻辑。
-*   **`service/`**: 业务逻辑核心。执行数据转换、计算、聚合等复杂操作，不直接与数据库交互。
-*   **`repository/` (或 `dao/`)**: 数据访问层。封装对数据库的增删改查操作（CRUD），供`service`层调用。
-*   **`model/`**: 定义数据结构体，与数据库表进行映射。
+*   **核心思想:** 初期将原 `service` (业务逻辑) 和 `repository` (数据访问) 的职责合并到 `handler` 层。当未来业务逻辑变得复杂时，再从 `handler` 中将逻辑抽离出来，重构出独立的 `service` 层。
 
-### 3.4. 扩展流程
-当需要支持新的数据类型（如库存）时，开发流程如下：
+*   **精简后的分层:**
+    *   **`main.go`**: 程序入口，负责初始化配置、数据库连接、路由等。
+    *   **`config/`**: 加载和管理应用配置。
+    *   **`router/`**: 定义API路由，将HTTP路径映射到 `handler` 函数。
+    *   **`handler/` (或 `controller/`)**: **核心处理层**。负责处理HTTP请求，包括参数解析、校验，并**直接调用GORM等数据库驱动**与数据库交互，完成业务逻辑。
+    *   **`model/`**: 定义数据结构体，与数据库表进行映射。
+
+### 3.4. 扩展流程 (精简后)
+当需要支持新的数据类型（如库存）时，开发流程被简化为：
 1.  **`model/`**: 新增 `inventory.go` 定义库存数据结构体。
-2.  **`repository/`**: 新增 `inventory_repo.go` 实现库存数据的数据库操作。
-3.  **`service/`**: 新增 `inventory_service.go` 处理库存相关的业务逻辑。
-4.  **`handler/`**: 新增 `inventory_handler.go` 处理接收库存数据的HTTP请求。
-5.  **`router/`**: 注册新的API路由，例如 `POST /api/v1/data/inventory`。
+2.  **`handler/`**: 新增 `inventory_handler.go`，在函数内部完成接收请求、数据校验、并直接调用GORM将数据存入数据库的全部逻辑。
+3.  **`router/`**: 在路由文件中注册新的API路径，例如 `POST /api/v1/data/inventory`，并将其指向新创建的 `handler`。
 
 ---
 
