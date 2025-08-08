@@ -23,7 +23,8 @@ export default defineBackground({
 
       return payload.result.map(item => ({
         sales_date: item.date,
-        sku: item.prodSkuId,
+        // 修复: 后端需要字符串类型的SKU。使用String()进行显式转换，这是最佳实践。
+        sku: String(item.prodSkuId),
         sales_number: item.salesNumber,
       }));
     }

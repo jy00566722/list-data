@@ -14,7 +14,7 @@ export const ApiHandlerMap = {
   // --- 每日销量API ---
   '/mms/venom/api/supplier/sales/management/querySkuSalesNumber': {
     dataType: 'DAILY_SALES',
-    backendEndpoint: 'http://localhost:8080/api/v1/data/sales',
+    backendEndpoint: 'http://localhost:8080/api/v1/sales/daily-sku',
   },
 
   // --- 库存水平API (未来扩展示例) ---

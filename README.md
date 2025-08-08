@@ -76,8 +76,7 @@ const ApiHandlerMap = {
   // ... 未来在此处添加新的API监控配置
 };
 
-// content.js 在接收到数据后，可以连同dataType一起上报
-// 后端根据dataType来决定数据存入哪个表、如何处理
+//后端根据每个API数据，设计相对应的接口拉收信息
 ```
 
 ---
@@ -101,7 +100,7 @@ const ApiHandlerMap = {
 
     *   **设计原则:**
         *   **数据非冗余:** 商品的基础信息（如SKC, SPU, 名称, 图片）只存储一次。
-        *   **职责单一:** `products` 表负责管理商品本身，`daily_sales` 表负责记录销量，未来新增的表（如库存、广告）也只负责各自的业务数据。
+        *   **职责单一:** `products` 表负责管理商品本身，`daily_sales_sku` 表负责记录销量，未来新增的表（如库存、广告）也只负责各自的业务数据。
         *   **关系清晰:** 所有业务数据表通过 `product_id` 外键与 `products` 表关联，形成清晰、规范的关系模型。
 
     ```sql
@@ -121,21 +120,12 @@ const ApiHandlerMap = {
       UNIQUE KEY `uk_shop_skc` (`shop_name`, `skc`) COMMENT '店铺和SKC是唯一的'
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品主数据表';
 
-    -- 每日SKC销量记录表 (已优化)
-    CREATE TABLE `daily_sales` (
-      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-      `product_id` BIGINT UNSIGNED NOT NULL COMMENT '关联的商品ID (外键)',
-      `sales_date` DATE NOT NULL COMMENT '销量统计日期',
-      `sales_count` INT NOT NULL COMMENT '销量',
-      `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-      `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-      `raw_data` JSON DEFAULT NULL COMMENT '原始API返回的JSON数据，用于调试和追溯',
-      PRIMARY KEY (`id`),
-      UNIQUE KEY `uk_product_date` (`product_id`, `sales_date`) COMMENT '商品和日期的唯一索引，防止重复上报',
-      INDEX `idx_sales_date` (`sales_date`) COMMENT '为按日期查询添加索引',
-      FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='每日销量表';
-
+    --每日SKU销量收集表(这个是收集每日SKU销量的表，只负责收集，然后后端根据SKU所属的店铺，SKC再统计到SKC销量表,以及未来可能的店铺销量表，等等。)
+     字段比较简单{
+        sales_date:2025-08-08,
+        sku: sku,
+        sales_number: 10,
+      }
     -- 未来可扩展的库存表 (示例)
     CREATE TABLE `inventory_levels` (
       `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
