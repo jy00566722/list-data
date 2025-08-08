@@ -97,29 +97,52 @@ const ApiHandlerMap = {
     *   **理由:** 虽然项目的核心数据（如每日销量）具有时间序列特征，使用TimescaleDB等专业时序数据库在理论上性能更优，但考虑到项目初期的SKU总量和数据增长速率可控，MySQL的性能完全可以满足需求。同时，MySQL拥有广泛的社区支持、成熟的生态和稳定的事务处理能力，团队对其也更为熟悉，有利于快速开发和后期维护。
 
 *   **表结构设计 (MySQL):**
+    经过分析，为提升项目的长期可扩展性和数据结构的合理性，我们对初始设计进行了优化。核心思想是引入一个独立的 **`products` (商品) 表**，作为所有业务数据的关联中心。
+
+    *   **设计原则:**
+        *   **数据非冗余:** 商品的基础信息（如SKC, SPU, 名称, 图片）只存储一次。
+        *   **职责单一:** `products` 表负责管理商品本身，`daily_sales` 表负责记录销量，未来新增的表（如库存、广告）也只负责各自的业务数据。
+        *   **关系清晰:** 所有业务数据表通过 `product_id` 外键与 `products` 表关联，形成清晰、规范的关系模型。
 
     ```sql
-    -- 每日SKC销量记录表
-    CREATE TABLE `daily_sales` (
+    -- 商品主数据表 (核心)
+    CREATE TABLE `products` (
       `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
       `shop_name` VARCHAR(255) NOT NULL COMMENT '店铺名称',
       `skc` VARCHAR(255) NOT NULL COMMENT '商品SKC',
       `spu` VARCHAR(255) DEFAULT NULL COMMENT '商品SPU',
       `item_code` VARCHAR(255) DEFAULT NULL COMMENT '商家编码/货号',
+      `product_name` VARCHAR(512) DEFAULT NULL COMMENT '商品标题',
+      `product_image_url` VARCHAR(1024) DEFAULT NULL COMMENT '商品主图URL',
+      `category` VARCHAR(255) DEFAULT NULL COMMENT '商品类目',
+      `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
+      `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录更新时间',
+      PRIMARY KEY (`id`),
+      UNIQUE KEY `uk_shop_skc` (`shop_name`, `skc`) COMMENT '店铺和SKC是唯一的'
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品主数据表';
+
+    -- 每日SKC销量记录表 (已优化)
+    CREATE TABLE `daily_sales` (
+      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+      `product_id` BIGINT UNSIGNED NOT NULL COMMENT '关联的商品ID (外键)',
       `sales_date` DATE NOT NULL COMMENT '销量统计日期',
       `sales_count` INT NOT NULL COMMENT '销量',
       `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
       `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
       `raw_data` JSON DEFAULT NULL COMMENT '原始API返回的JSON数据，用于调试和追溯',
       PRIMARY KEY (`id`),
-      UNIQUE KEY `uk_shop_skc_date` (`shop_name`, `skc`, `sales_date`) COMMENT '店铺、SKC和日期的唯一索引，防止重复上报'
+      UNIQUE KEY `uk_product_date` (`product_id`, `sales_date`) COMMENT '商品和日期的唯一索引，防止重复上报',
+      INDEX `idx_sales_date` (`sales_date`) COMMENT '为按日期查询添加索引',
+      FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='每日销量表';
 
     -- 未来可扩展的库存表 (示例)
     CREATE TABLE `inventory_levels` (
       `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-      -- ... 其他字段，如 skc, warehouse, quantity, record_time ...
-      PRIMARY KEY (`id`)
+      `product_id` BIGINT UNSIGNED NOT NULL COMMENT '关联的商品ID (外键)',
+      -- ... 其他字段，如 warehouse, quantity, record_time ...
+      PRIMARY KEY (`id`),
+      FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE CASCADE
     ) ENGINE=InnoDB COMMENT='库存水平表';
     ```
 

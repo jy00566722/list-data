@@ -1,0 +1,25 @@
+import { defineConfig } from 'wxt';
+
+// See https://wxt.dev/api/config.html
+export default defineConfig({
+  modules: ['@wxt-dev/module-vue'],
+    manifest: {
+      version: "0.0.1",
+    // We need to allow the content script to access the interceptor script.
+    web_accessible_resources: [
+      {
+        resources: ['/interceptor.js'],
+        matches: ['*://*.temu.com/*'],
+      },
+    ],
+    // We also need to declare the permissions required.
+    permissions: [
+      // Allows the extension to run on all Temu pages.
+      "tabs",
+
+    ],
+    host_permissions: [
+      "*://*.temu.com/*",
+    ]
+  },
+});

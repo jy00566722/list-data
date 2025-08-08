@@ -24,6 +24,8 @@ window.fetch = function(...args) {
                 // 通过 postMessage 将捕获的数据发送给 content.js
                 // 这是从页面主世界到Content Script隔离世界最安全的通信方式
                 //window.postMessage({ type: 'FROM_INTERCEPTOR', payload: data }, '*');
+                window.postMessage({ type: 'FROM_INTERCEPTOR', payload: data }, '*');
+                
             }).catch(err => {
                 console.error('Error reading cloned response:', err);
             });
