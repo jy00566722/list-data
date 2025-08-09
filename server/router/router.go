@@ -19,6 +19,17 @@ func SetupRouter(r *gin.Engine) {
 			salesGroup.POST("/daily-sku", handler.CreateDailySaleSku)
 		}
 
+		// 商品管理相关路由
+		productGroup := apiV1.Group("/products")
+		{
+			// GET /api/v1/products - 获取所有商品
+			productGroup.GET("", handler.GetProducts)
+			// DELETE /api/v1/products/:id - 删除指定商品
+			productGroup.DELETE("/:id", handler.DeleteProduct)
+			// POST /api/v1/products/upload - 通过Excel上传/更新商品
+			productGroup.POST("/upload", handler.UploadProducts)
+		}
+
 		// 可以在这里继续添加其他路由组, 例如 /api/v1/products 等
 	}
 

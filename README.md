@@ -105,20 +105,19 @@ const ApiHandlerMap = {
 
     ```sql
     -- 商品主数据表 (核心)
-    CREATE TABLE `products` (
-      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-      `shop_name` VARCHAR(255) NOT NULL COMMENT '店铺名称',
-      `skc` VARCHAR(255) NOT NULL COMMENT '商品SKC',
-      `spu` VARCHAR(255) DEFAULT NULL COMMENT '商品SPU',
-      `item_code` VARCHAR(255) DEFAULT NULL COMMENT '商家编码/货号',
-      `product_name` VARCHAR(512) DEFAULT NULL COMMENT '商品标题',
-      `product_image_url` VARCHAR(1024) DEFAULT NULL COMMENT '商品主图URL',
-      `category` VARCHAR(255) DEFAULT NULL COMMENT '商品类目',
-      `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
-      `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录更新时间',
-      PRIMARY KEY (`id`),
-      UNIQUE KEY `uk_shop_skc` (`shop_name`, `skc`) COMMENT '店铺和SKC是唯一的'
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品主数据表';
+      商品表包括以下字段：
+      店铺ID(shop_id)
+      店铺代码(shop_code)
+      商品SPU(spu)
+      商品SKC(skc)
+      商品SKU(sku)
+      商品SKC货号(skc_code)
+      店铺SKU货号(sku_code)
+      商品颜色.中文(color.cn)
+      商品颜色.英文(color.cn)
+      商品尺码(size)
+      商品缩略图url(image_url)
+      商品条码编码(bar_code)
 
     --每日SKU销量收集表(这个是收集每日SKU销量的表，只负责收集，然后后端根据SKU所属的店铺，SKC再统计到SKC销量表,以及未来可能的店铺销量表，等等。)
      字段比较简单{
@@ -204,4 +203,4 @@ src/
 ---
 
 ## 5. 总结与后续步骤
-本技术文档确立了项目的整体架构和关键技术选型。所有后续的开发工作都应严格遵循本文档中定义的设计方案和规范，以确保项目的高质量、可维护性和可扩展性。
+本技术文档确立了项目的整体架构和关键技术选型。所有后续的开发工作都应遵循本文档中定义的设计方案和规范，如果后续有修改，按修改的.以确保项目的高质量、可维护性和可扩展性。

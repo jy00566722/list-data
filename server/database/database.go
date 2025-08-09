@@ -29,7 +29,7 @@ func Init() {
 
 	// 自动迁移模式，GORM会自动创建或更新表结构以匹配模型
 	fmt.Println("Running auto migration...")
-	err = DB.AutoMigrate(&model.DailySaleSku{})
+	err = DB.AutoMigrate(&model.DailySaleSku{}, &model.Product{})
 	if err != nil {
 		log.Fatalf("Failed to auto migrate database: %v", err)
 	}
