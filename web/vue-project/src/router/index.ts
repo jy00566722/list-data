@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import ProductView from '../views/ProductView.vue'
+import UploadView from '../views/UploadView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -8,13 +9,12 @@ const router = createRouter({
       path: '/',
       name: 'products',
       component: ProductView
+    },
+    {
+      path: '/upload',
+      name: 'upload',
+      component: UploadView
     }
-    // You can add other routes here, for example:
-    // {
-    //   path: '/about',
-    //   name: 'about',
-    //   component: () => import('../views/AboutView.vue')
-    // }
   ]
 })
 

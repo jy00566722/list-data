@@ -4,6 +4,7 @@ import (
 	"data-list/server/database"
 	"data-list/server/model"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -12,75 +13,82 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// GetProducts retrieves all products from the database.
+// GetProducts 从数据库中检索所有商品。
 func GetProducts(c *gin.Context) {
 	var products []model.Product
 	if err := database.DB.Find(&products).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve products"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取商品列表失败"})
 		return
 	}
 	c.JSON(http.StatusOK, products)
 }
 
-// DeleteProduct deletes a product by its ID.
+// DeleteProduct 根据ID删除一个商品。
 func DeleteProduct(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid product ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的商品ID"})
 		return
 	}
 
 	if err := database.DB.Delete(&model.Product{}, id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete product"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除商品失败"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Product deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "商品删除成功"})
 }
 
-// UploadProducts handles uploading an Excel file to add or update products.
-// It uses an "Upsert" mechanism based on the SKU to avoid duplicates.
+// UploadProducts 处理上传Excel文件以新增或更新商品。
+// 它基于SKU使用"Upsert"机制来避免重复。
 func UploadProducts(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "File upload failed"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "文件上传失败"})
 		return
 	}
 
 	src, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open uploaded file"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "无法打开上传的文件"})
 		return
 	}
 	defer src.Close()
 
 	f, err := excelize.OpenReader(src)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read Excel file"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "无法读取Excel文件"})
 		return
 	}
 
-	// Get all rows from the first sheet.
+	// 从第一个工作表中获取所有行。
 	rows, err := f.GetRows(f.GetSheetName(0))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get rows from sheet"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "无法从工作表获取行"})
 		return
 	}
 
 	var productsToUpsert []model.Product
-	// Skip header row (i=0)
+	log.Printf("开始处理Excel文件，总行数: %d", len(rows))
+
+	// 跳过表头行 (i=0)
 	for i, row := range rows {
 		if i == 0 {
+			log.Println("跳过表头行:", row)
 			continue
 		}
 
-		// Basic validation: ensure the row has enough columns.
-		// Adjust the number based on your Excel file's structure.
-		if len(row) < 13 {
-			continue // Or handle error
+		// --- 新增日志 ---
+		// log.Printf("正在处理第 %d 行, 列数: %d, 内容: %v", i+1, len(row), row)
+
+		// 基本验证：确保行有足够的列。
+		// 根据您的Excel文件结构调整此数字。
+		if len(row) < 12 {
+			log.Printf("第 %d 行因列数不足 (%d < 12) 而被跳过", i+1, len(row))
+			continue
 		}
-		
+
 		shopID, _ := strconv.ParseInt(row[0], 10, 64)
 
 		product := model.Product{
@@ -101,24 +109,25 @@ func UploadProducts(c *gin.Context) {
 	}
 
 	if len(productsToUpsert) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No valid product data found in the file"})
+		log.Println("文件中未找到有效的商品数据")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "文件中未找到有效的商品数据"})
 		return
 	}
 
-	// Use GORM's OnConflict (Upsert) feature.
-	// If a product with the same SKU exists, update all other fields.
-	// Otherwise, insert a new product.
+	// 使用GORM的OnConflict (Upsert)功能。
+	// 如果存在相同SKU的商品，则更新所有其他字段。
+	// 否则，插入一个新商品。
 	err = database.DB.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "sku"}},
 		DoUpdates: clause.AssignmentColumns([]string{"shop_id", "shop_code", "spu", "skc", "skc_code", "sku_code", "color_cn", "color_en", "size", "image_url", "bar_code"}),
 	}).Create(&productsToUpsert).Error
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to upsert products: %v", err)})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("数据库操作失败: %v", err)})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Successfully processed %d products.", len(productsToUpsert)),
+		"message": fmt.Sprintf("成功处理 %d 件商品。", len(productsToUpsert)),
 	})
 }
